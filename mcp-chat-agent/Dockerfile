@@ -8,8 +8,6 @@ WORKDIR /app
 USER 10014
 
 # Install system dependencies
-RUN apt-get update && apt-get install -y \
-    git 
 
 COPY requirements.txt .
 
