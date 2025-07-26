@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 
 # Install mcp-use package from GitHub
-RUN pip install git+https://github.com/sajith-madhusanka/bijira-samples.git@mcp-sample#subdirectory=external-lib/mcp-use
+RUN pip install git+https://github.com/sajith-madhusanka/bijira-samples.git@main#subdirectory=external-lib/mcp-use
 
 # Set a non-root user
 USER 10014
