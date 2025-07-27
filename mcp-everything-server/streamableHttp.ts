@@ -12,50 +12,49 @@ const transports: Map<string, StreamableHTTPServerTransport> = new Map<string, S
 
 app.post('/mcp', async (req: Request, res: Response) => {
   console.error('Received MCP POST request');
+  console.error('Request headers:', req.headers);
+
   try {
-    // Check for existing session ID
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    console.error(`Extracted sessionId: ${sessionId}`);
+
     let transport: StreamableHTTPServerTransport;
 
     if (sessionId && transports.has(sessionId)) {
-      // Reuse existing transport
+      console.error(`Reusing existing transport for session: ${sessionId}`);
       transport = transports.get(sessionId)!;
     } else if (!sessionId) {
+      console.error('No sessionId provided; treating as initialization request');
 
       const { server, cleanup } = createServer();
-
-      // New initialization request
       const eventStore = new InMemoryEventStore();
+
       transport = new StreamableHTTPServerTransport({
         sessionIdGenerator: () => randomUUID(),
-        eventStore, // Enable resumability
+        eventStore,
         onsessioninitialized: (sessionId: string) => {
-          // Store the transport by session ID when session is initialized
-          // This avoids race conditions where requests might come in before the session is stored
           console.error(`Session initialized with ID: ${sessionId}`);
           transports.set(sessionId, transport);
         }
       });
 
-
-      // Set up onclose handler to clean up transport when closed
       server.onclose = async () => {
         const sid = transport.sessionId;
         if (sid && transports.has(sid)) {
-          console.error(`Transport closed for session ${sid}, removing from transports map`);
+          console.error(`Transport closed for session ${sid}, cleaning up`);
           transports.delete(sid);
           await cleanup();
         }
       };
 
-      // Connect the transport to the MCP server BEFORE handling the request
-      // so responses can flow back through the same transport
       await server.connect(transport);
-
+      console.error('Transport connected to server, handling request...');
       await transport.handleRequest(req, res);
-      return; // Already handled
+      return;
     } else {
-      // Invalid request - no session ID or not initialization request
+      console.error(`Invalid request: sessionId "${sessionId}" provided but not found in transport map`);
+      console.error(`Current sessions in memory: ${Array.from(transports.keys()).join(', ')}`);
+
       res.status(400).json({
         jsonrpc: '2.0',
         error: {
@@ -67,11 +66,11 @@ app.post('/mcp', async (req: Request, res: Response) => {
       return;
     }
 
-    // Handle the request with existing transport - no need to reconnect
-    // The existing transport is already connected to the server
+    console.error(`Handling request with existing transport for session: ${sessionId}`);
     await transport.handleRequest(req, res);
+
   } catch (error) {
-    console.error('Error handling MCP request:', error);
+    console.error('Error handling MCP POST request:', error);
     if (!res.headersSent) {
       res.status(500).json({
         jsonrpc: '2.0',
@@ -81,7 +80,6 @@ app.post('/mcp', async (req: Request, res: Response) => {
         },
         id: req?.body?.id,
       });
-      return;
     }
   }
 });
