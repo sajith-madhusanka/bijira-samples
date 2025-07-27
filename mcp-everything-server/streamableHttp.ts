@@ -1,6 +1,6 @@
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { InMemoryEventStore } from '@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore.js';
-import getRawBody from 'raw-body';
+import bodyParser from 'body-parser';
 import express, { Request, Response } from "express";
 import { createServer } from "./everything.js";
 import { randomUUID } from 'node:crypto';
@@ -9,19 +9,13 @@ console.error('Starting Streamable HTTP server...');
 
 const app = express();
 
-// Middleware to read and log raw body
-app.use(async (req, res, next) => {
-  try {
-    const rawBody = await getRawBody(req);
-    console.error('Raw request body:\n', rawBody.toString('utf8'));
-    // Optional: store it in req for later use
-    (req as any).rawBody = rawBody;
-    next();
-  } catch (err) {
-    console.error('Failed to read raw body:', err);
-    res.status(400).send('Invalid body');
+// This will save the raw body in `req.rawBody`
+app.use(bodyParser.raw({
+  type: '*/*',
+  verify: (req, res, buf) => {
+    (req as any).rawBody = buf;
   }
-});
+}));
 
 
 const transports: Map<string, StreamableHTTPServerTransport> = new Map<string, StreamableHTTPServerTransport>();
@@ -29,6 +23,8 @@ const transports: Map<string, StreamableHTTPServerTransport> = new Map<string, S
 app.post('/mcp', async (req: Request, res: Response) => {
   console.error('Received MCP POST request');
   console.error('Request headers:', req.headers);
+  const rawBody = (req as any).rawBody;
+  console.error('Raw Body:', rawBody?.toString('utf8'));
 
   try {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
