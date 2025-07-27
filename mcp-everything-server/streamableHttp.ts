@@ -1,6 +1,6 @@
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { InMemoryEventStore } from '@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore.js';
-import bodyParser from 'body-parser';
+import { Readable } from 'stream';
 import express, { Request, Response } from "express";
 import { createServer } from "./everything.js";
 import { randomUUID } from 'node:crypto';
@@ -9,13 +9,26 @@ console.error('Starting Streamable HTTP server...');
 
 const app = express();
 
-// This will save the raw body in `req.rawBody`
-app.use(bodyParser.raw({
-  type: '*/*',
-  verify: (req, res, buf) => {
-    (req as any).rawBody = buf;
-  }
-}));
+app.use((req, res, next) => {
+  const chunks: Buffer[] = [];
+  req.on('data', (chunk) => chunks.push(chunk));
+  req.on('end', () => {
+    const body = Buffer.concat(chunks);
+    (req as any).rawBody = body;
+    console.log('Request body:', body.toString('utf8'));
+    
+    // Recreate the stream for subsequent middleware
+    req.body = body; // If you want to make it available as parsed body
+    req.pipe = () => new Readable({
+      read() {
+        this.push(body);
+        this.push(null);
+      }
+    });
+    next();
+  });
+  req.on('error', next);
+});
 
 
 const transports: Map<string, StreamableHTTPServerTransport> = new Map<string, StreamableHTTPServerTransport>();
@@ -23,9 +36,7 @@ const transports: Map<string, StreamableHTTPServerTransport> = new Map<string, S
 app.post('/mcp', async (req: Request, res: Response) => {
   console.error('Received MCP POST request');
   console.error('Request headers:', req.headers);
-  const rawBody = (req as any).rawBody;
-  console.error('Raw Body:', rawBody?.toString('utf8'));
-
+  
   try {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
     console.error(`Extracted sessionId: ${sessionId}`);
