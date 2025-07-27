@@ -1,6 +1,5 @@
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { InMemoryEventStore } from '@modelcontextprotocol/sdk/examples/shared/inMemoryEventStore.js';
-import { Readable } from "stream";
 import express, { Request, Response } from "express";
 import { createServer } from "./everything.js";
 import { randomUUID } from 'node:crypto';
@@ -8,27 +7,6 @@ import { randomUUID } from 'node:crypto';
 console.error('Starting Streamable HTTP server...');
 
 const app = express();
-
-app.use((req, res, next) => {
-  const chunks: Buffer[] = [];
-  req.on('data', (chunk) => chunks.push(chunk));
-  req.on('end', () => {
-    const body = Buffer.concat(chunks);
-    (req as any).rawBody = body;
-    console.log('Request body:', body.toString('utf8'));
-    
-    // Recreate the stream for subsequent middleware
-    req.body = body; // If you want to make it available as parsed body
-    req.pipe = () => new Readable({
-      read() {
-        this.push(body);
-        this.push(null);
-      }
-    });
-    next();
-  });
-  req.on('error', next);
-});
 
 
 const transports: Map<string, StreamableHTTPServerTransport> = new Map<string, StreamableHTTPServerTransport>();
